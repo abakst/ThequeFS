@@ -8,29 +8,31 @@ For Great Justice.
 
 ## Usage
 
-thequefs [COMMAND] ... [OPTIONS]
+~~~~{.sh}
+    thequefs [COMMAND] ... [OPTIONS]
 
-Common flags:
-  -? --help           Display help message
-  -V --version        Print version information
+    Common flags:
+      -? --help           Display help message
+      -V --version        Print version information
 
-thequefs master [OPTIONS]
+    thequefs master [OPTIONS]
 
-  -h --host=ITEM      Host to run master on
-  -p --port=ITEM      Port to run master on
+      -h --host=ITEM      Host to run master on
+      -p --port=ITEM      Port to run master on
 
-thequefs slave [OPTIONS]
+    thequefs slave [OPTIONS]
 
-  -h --host=ITEM      Host to run slave on
-  -p --port=ITEM      Port to run slave on
+      -h --host=ITEM      Host to run slave on
+      -p --port=ITEM      Port to run slave on
 
-thequefs newblob [OPTIONS]
+    thequefs newblob [OPTIONS]
 
-  -m --master=ITEM  
-  -b --blobname=ITEM  Blob Name Prefix
+      -m --master=ITEM  
+      -b --blobname=ITEM  Blob Name Prefix
 
-thequefs push [OPTIONS]
+    thequefs push [OPTIONS]
 
-  -n --node=ITEM      Data Node Address
-     --blobid=ITEM    Allocated Blob ID
-     --blobdata=ITEM  Blob Data
+      -n --node=ITEM      Data Node Address
+         --blobid=ITEM    Allocated Blob ID
+         --blobdata=ITEM  Blob Data
+~~~~
