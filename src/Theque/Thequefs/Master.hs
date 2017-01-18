@@ -15,13 +15,14 @@ import qualified Data.ByteString.Char8 as BS
 
 import Control.Distributed.Process hiding (call)
 import Control.Distributed.Process.Closure
-import Control.Distributed.Process.Extras (resolve)
 import Control.Distributed.Process.Extras.Time
 import Control.Distributed.Process.Node
 import Control.Distributed.Process.ManagedProcess
 import Control.Distributed.Process.Backend.SimpleLocalnet
 
+import Theque.Thequefs.Types
 import Theque.Thequefs.DataNode (runDataNode)
+import Theque.Thequefs.TagNode  (runTagNode)
 
 masterService :: String
 masterService = "theque:master"
@@ -32,46 +33,41 @@ data MasterState = MS {
   , lastBlobNo  :: Int
   }
 
+initState :: MasterState
 initState = MS { dataServers = []
                , tagServers  = []
                , lastBlobNo  = 0
                }
 
-data MasterAPI = AddBlob String Int -- ^ Args: Blob prefix, Replication
-               | TagBlobs
+data MasterAPI = AddBlob BlobId Int  -- ^ Args: Blob prefix, Replication
+               | TagBlobs TagId [Blob] -- ^ Args: Tag, Blobs
                | GetTag
                  deriving (Eq, Ord, Show, Generic)
+
+data MasterResponse = OK
+                    | AddBlobServers BlobId [ProcessId]
+                    deriving (Eq, Ord, Show, Generic)
+
 instance Binary MasterAPI
+instance Binary MasterResponse
 
 findMaster :: String -> Process ProcessId
-findMaster srv
-  = do say "Finding Master"
-       say (show n)
-       Just s <- resolve (n, masterService)
-       say "Found Master"
-       return s
-  where n = makeNodeId srv
-
-makeNodeId :: String -> NodeId
-makeNodeId addr
-  = NodeId
-  . EndPointAddress
-  . BS.concat $ [BS.pack addr, BS.pack ":1"]
+findMaster srv = findService node masterService
+  where -- ugh
+    node = NodeId
+         . EndPointAddress
+         $ BS.concat [BS.pack srv, BS.pack ":1"]
 
 addBlob :: ProcessId -> String -> Int -> Process MasterResponse
 addBlob m bn k
   = call m (AddBlob bn k)
 
-data MasterResponse = OK
-                    | AddBlobServers String [ProcessId]
-                    deriving (Eq, Ord, Show, Generic)
-instance Binary MasterResponse
+tagBlobs :: ProcessId -> TagId -> [Blob] -> Process MasterResponse
+tagBlobs m tag blobs
+  = call m (TagBlobs tag blobs)
 
-tagServer :: () -> Process ()
-tagServer _
-  = do say "tag server"
-       liftIO $ threadDelay 10000
-       return ()
+tagServer :: ProcessId -> Process ()
+tagServer m = say "TagServer Starting..." >> runTagNode m
 
 dataServer :: ProcessId -> Process ()
 dataServer m = say "DataServer Starting..." >> runDataNode m
@@ -112,10 +108,15 @@ type MasterReply = Process (ProcessReply MasterResponse MasterState)
 
 masterAPIHandler' :: MasterState -> MasterAPI -> MasterReply
 masterAPIHandler' s (AddBlob n k)
-  = reply (AddBlobServers n' ts) s''
+  = reply (AddBlobServers blob ts) s''
   where
-    (ts, s') = chooseDataServers k s
-    (n', s'') = newBlobName n s'
+    (ts, s')    = chooseDataServers k s
+    (blob, s'') = newBlob n s'
+masterAPIHandler' s (TagBlobs tag blobs)
+  -- 1. ask each tag server for current version of tag
+  -- 2. choose most up-to-date??
+  -- 3. modify tag store
+  = undefined
 masterAPIHandler' s _
   = do say "got message"
        reply OK s
@@ -129,7 +130,8 @@ chooseDataServers k s
     shuffle l = drop k l ++ take k l
     srvs      = dataServers s
 
-newBlobName n s
+newBlob :: String -> MasterState -> (BlobId, MasterState)
+newBlob n s
   = (n', s')
   where
     n' = n ++ "__" ++ show (lastBlobNo s)

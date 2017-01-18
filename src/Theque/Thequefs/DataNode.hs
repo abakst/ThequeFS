@@ -8,6 +8,7 @@ import qualified Data.HashMap.Strict as M
 import Control.Distributed.Process hiding (call)
 import Control.Distributed.Process.Extras.Time
 import Control.Distributed.Process.ManagedProcess
+import Theque.Thequefs.Types
 
 {-
 DataNode:
@@ -18,7 +19,8 @@ DataNode:
 dataNodeService :: String
 dataNodeService = "theque:dataNode"
 
-type BlobId      = String
+findDataNode = flip findService dataNodeService
+
 type DataNodeMap = M.HashMap BlobId BS.ByteString
 
 data DataNodeState = DNS {
@@ -47,7 +49,9 @@ initState m = DNS { blobs = M.empty, master = m }
         \x. while true do { msg <- recv; case msg of Foo -> ... }
 @-}
 runDataNode :: ProcessId -> Process ()
-runDataNode m =
+runDataNode m = do
+  self <- getSelfPid
+  register dataNodeService self
   serve (initState m) initializeDataNode dataNodeProcess
 
 initializeDataNode s = return $ InitOk s NoDelay
