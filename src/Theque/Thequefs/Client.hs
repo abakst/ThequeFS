@@ -28,9 +28,31 @@ runClient client node
       = do s <- Master.findMaster maddr
            say (show s)
            addBlob s blob
+
     go PushData { node = n, Cmd.blobId = bid, Cmd.blobData = bd }
       = do pid <- DataNode.findDataNode (makeNodeId n)
            pushBlob pid bid bd
+
+    go TagRefs { master   = maddr
+               , tagName  = t
+               , blobURLS = bs
+               , tagNames = ts
+               }
+      = do m <- Master.findMaster maddr
+           addToTag m t bs ts
+           return ()
+
+    go GetTag { master = maddr
+              , tagName = t
+              }
+      = do m    <- Master.findMaster maddr
+           resp <- Master.getTag m (TagId t)
+           case resp of
+             Master.TagRefs refs ->
+               liftIO $ do BSL.putStr (encode refs)
+                           exitSuccess
+           return ()
+
 
 addBlob :: ProcessId -> BlobId -> Process ()
 addBlob master bn
@@ -49,3 +71,18 @@ pushBlob pid bid bd
        case resp of
          DataNode.OK         -> liftIO $ exitSuccess
          DataNode.BlobExists -> liftIO $ exitFailure
+
+addToTag :: ProcessId
+         -> String
+         -> [String]
+         -> [String]
+         -> Process ()
+addToTag m t bs ts
+  = do resp <- Master.addTag m (TagId t) refs
+       liftIO $ putStrLn (show refs)
+       say (show resp)
+       return ()
+  where
+    refs  = brefs : trefs
+    brefs = Blobs (blobLoc <$> bs)
+    trefs = OtherTag . TagId <$> ts

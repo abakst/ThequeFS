@@ -14,17 +14,26 @@ data ThequeFS = Master  { host :: String, port :: String }
                          , blobId   :: String
                          , blobData :: String
                          }
+              | TagRefs { master   :: String
+                        , tagName  :: String
+                        , blobURLS :: [String]
+                        , tagNames :: [String]
+                        }
+              | GetTag  { master :: String
+                        , tagName :: String
+                        }
               deriving (Show, Data, Typeable)
 
 getCmdArgs :: IO ThequeFS
 getCmdArgs = cmdArgs thequeArgs
-
 
 thequeArgs :: ThequeFS
 thequeArgs = modes [ master   &= name "master"
                    , slave    &= name "slave"
                    , newblob  &= name "newblob"
                    , pushblob &= name "push"
+                   , tag      &= name "tag"
+                   , getTag   &= name "get-tag"
                    ]
   where
     master  = Master { host = "localhost" &= help "Host to run master on"
@@ -40,3 +49,11 @@ thequeArgs = modes [ master   &= name "master"
                         , blobId   = def &= help "Allocated Blob ID"
                         , blobData = def &= help "Blob Data"
                         }
+    tag      = TagRefs { master  = "localhost:9001"
+                       , tagName = def  &= help "Tag"
+                       , blobURLS = def &= help "data:server:addr:port:blob,..."
+                       , tagNames = def &= help "t0,..."
+                       }
+    getTag = GetTag { master  = "localhost:9001"
+                    , tagName =  def &= help "Tag to get"
+                    }

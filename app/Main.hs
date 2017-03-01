@@ -11,10 +11,11 @@ import Control.Distributed.Process.Node (initRemoteTable, runProcess)
 import Control.Distributed.Process.Backend.SimpleLocalnet
 import Control.Distributed.Process.Extras as E (__remoteTable) 
 
-import Theque.Thequefs.Master as M (runMaster, findMaster, addBlob, __remoteTable)
-import Theque.Thequefs.Client as C
 import Theque.Thequefs.Types
 import Theque.Thequefs.CmdLine
+import Theque.Thequefs.Client as C
+import Theque.Thequefs.Master as M
+  (runMaster, findMaster, addBlob, __remoteTable)
 
 main :: IO ()
 main = do

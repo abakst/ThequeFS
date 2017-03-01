@@ -1,14 +1,23 @@
+{-#
+  OPTIONS_GHC -fplugin      Brisk.Plugin
+              -fplugin-opt  Brisk.Plugin:runDataNode
+#-}
 {-# LANGUAGE DeriveGeneric #-}
 module Theque.Thequefs.DataNode where
 
-import Data.Binary
-import GHC.Generics (Generic)
+import           Data.Binary
+import           GHC.Generics (Generic)
 import qualified Data.ByteString as BS
 import qualified Data.HashMap.Strict as M
-import Control.Distributed.Process hiding (call)
-import Control.Distributed.Process.Extras.Time
-import Control.Distributed.Process.ManagedProcess
-import Theque.Thequefs.Types
+import           Control.Distributed.Process hiding (call)
+import           Control.Distributed.Process.Extras.Time
+import           Control.Distributed.Process.ManagedProcess
+import           Theque.Thequefs.Types
+
+import           GHC.Base.Brisk
+import           Control.Distributed.Process.Brisk hiding (call)
+import           Control.Exception.Base.Brisk
+import           Control.Distributed.Process.ManagedProcess.Brisk
 
 {-
 DataNode:
@@ -24,11 +33,11 @@ findDataNode = flip findService dataNodeService
 type DataNodeMap = M.HashMap BlobId BS.ByteString
 
 data DataNodeState = DNS {
-    master :: ProcessId
-  , blobs  :: !DataNodeMap
+  blobs  :: !DataNodeMap
   }
 
 data DataNodeAPI = AddBlob String BS.ByteString
+                 | GetBlob BlobId
                  deriving (Eq, Ord, Show, Generic)
 
 pushBlob :: ProcessId -> String -> BS.ByteString -> Process DataNodeResponse
@@ -38,22 +47,25 @@ pushBlob p bn bdata
 instance Binary DataNodeAPI
 
 data DataNodeResponse = OK
+                      | BlobData BS.ByteString
+                      | BlobNotFound
                       | BlobExists
                       deriving (Eq, Ord, Show, Generic)
 instance Binary DataNodeResponse
 
-initState m = DNS { blobs = M.empty, master = m }
+initState = DNS { blobs = M.empty }
 
 {-@
   ANN runDataNode ::
         \x. while true do { msg <- recv; case msg of Foo -> ... }
 @-}
-runDataNode :: ProcessId -> Process ()
-runDataNode m = do
+runDataNode :: Process ()
+runDataNode = do
   self <- getSelfPid
   register dataNodeService self
-  serve (initState m) initializeDataNode dataNodeProcess
+  serve initState initializeDataNode dataNodeProcess
 
+initializeDataNode :: s -> Process (InitResult s)
 initializeDataNode s = return $ InitOk s NoDelay
 
 dataNodeProcess :: ProcessDefinition DataNodeState
@@ -67,6 +79,10 @@ dataNodeAPIHandler :: Dispatcher DataNodeState
 dataNodeAPIHandler = handleCall dataNodeAPIHandler'
 
 dataNodeAPIHandler' :: DataNodeState -> DataNodeAPI -> DataNodeReply
+dataNodeAPIHandler' st (GetBlob bid)
+  = case M.lookup bid (blobs st) of
+      Nothing    -> reply BlobNotFound st
+      Just bdata -> reply (BlobData bdata) st
 dataNodeAPIHandler' st (AddBlob bn blob)
   = case M.lookup bn (blobs st) of
       Nothing ->

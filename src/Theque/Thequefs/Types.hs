@@ -1,5 +1,9 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-#
+  OPTIONS_GHC -fplugin      Brisk.Plugin
+              -fplugin-opt  Brisk.Plugin:runDataNode
+#-}
 module Theque.Thequefs.Types
   ( BlobId
   , BlobLoc(..)
@@ -8,6 +12,7 @@ module Theque.Thequefs.Types
   , SpecialTag(..)
   , TagRef(..)
   , Tag(..)
+  , blobLoc
   , endPoint
   , findService
   , makeNodeId
@@ -20,6 +25,7 @@ import Data.Binary
 import Data.Data
 import Data.Typeable
 import Network.Transport
+import Data.List.Split
 import qualified Data.ByteString.Char8 as BS
 
 import Control.Distributed.Process.Extras (resolve)
@@ -48,6 +54,7 @@ data TagId = TagId String
            | SpecialTagId SpecialTag
            deriving (Eq, Ord, Show, Generic)
 instance Binary TagId
+instance ToJSON TagId
 instance Hashable TagId where
   hashWithSalt s (TagId i)
     = hashWithSalt s i
@@ -57,9 +64,10 @@ instance Hashable TagId where
 data SpecialTag = Delete
                 deriving (Eq, Ord, Show, Generic)
 instance Binary SpecialTag
+instance ToJSON SpecialTag
 
 data TagRef = OtherTag TagId
-            | Blobs    [Blob]
+            | Blobs    [BlobLoc]
             deriving (Eq, Ord, Show, Generic)
 
 data Tag = Tag { tagId   :: TagId
@@ -69,6 +77,8 @@ data Tag = Tag { tagId   :: TagId
          deriving (Eq, Ord, Show, Generic)
 instance Binary TagRef
 instance Binary Tag
+instance ToJSON TagRef
+instance ToJSON Tag
 
 endPoint :: ProcessId -> EndPointAddress
 endPoint = nodeAddress . processNodeId
@@ -84,3 +94,13 @@ findService srv service
   = do say (show srv ++ " " ++ service)
        Just s <- resolve (srv, service)
        return s
+
+blobLoc :: String -> BlobLoc
+blobLoc s
+  = BlobLoc { blobEndPoint = EndPointAddress bloburl
+            , blobId       = bid
+            }
+  where
+    splits  = splitOn ":" s
+    bloburl = BS.intercalate (BS.pack ":") (BS.pack <$> init splits)
+    bid     = last splits
