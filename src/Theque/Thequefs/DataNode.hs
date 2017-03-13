@@ -13,6 +13,7 @@ import           Control.Distributed.Process hiding (call)
 import           Control.Distributed.Process.Extras.Time
 import           Control.Distributed.Process.ManagedProcess
 import           Theque.Thequefs.Types
+import qualified Codec.Binary.UTF8.String as B8String
 
 import           GHC.Base.Brisk
 import           Control.Distributed.Process.Brisk hiding (call)
@@ -39,6 +40,8 @@ data DataNodeState = DNS {
 data DataNodeAPI = AddBlob String BS.ByteString
                  | GetBlob BlobId
                  deriving (Eq, Ord, Show, Generic)
+
+stringByteString = BS.pack . B8String.encode
 
 pushBlob :: ProcessId -> String -> BS.ByteString -> Process DataNodeResponse
 pushBlob p bn bdata
@@ -80,9 +83,13 @@ dataNodeAPIHandler = handleCall dataNodeAPIHandler'
 
 dataNodeAPIHandler' :: DataNodeState -> DataNodeAPI -> DataNodeReply
 dataNodeAPIHandler' st (GetBlob bid)
-  = case M.lookup bid (blobs st) of
-      Nothing    -> reply BlobNotFound st
-      Just bdata -> reply (BlobData bdata) st
+  = reply BlobNotFound st
+  -- = case M.lookup bid (blobs st) of
+  --     Nothing    -> reply BlobNotFound st
+  --     Just bdata -> reply (BlobData bdata) st
+dataNodeAPIHandler' st (AddBlob _ _)
+  = reply BlobNotFound st
+{-
 dataNodeAPIHandler' st (AddBlob bn blob)
   = case M.lookup bn (blobs st) of
       Nothing ->
@@ -92,3 +99,4 @@ dataNodeAPIHandler' st (AddBlob bn blob)
       Just bdata -> do
         say (bn ++ " := " ++ show bdata)
         reply BlobExists st
+-}

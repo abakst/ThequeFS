@@ -35,10 +35,7 @@ spawnMasterClients :: ProcessId -> [NodeId] -> Process (SymSet ProcessId)
 spawnMasterClients m ns
   = spawnSymmetric ns $ $(mkBriskClosure 'testClient) m
 
-main :: Backend
-     -> [NodeId]
-     -> [NodeId]
-     -> Process ()
+main :: Backend -> [NodeId] -> [NodeId] -> Process ()
 main b slaveNodes clientNodes
   = do m <- getSelfPid
        spawnMasterClients m clientNodes

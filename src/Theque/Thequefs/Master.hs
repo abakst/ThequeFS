@@ -103,31 +103,30 @@ runMaster _ ns = do
   self <- getSelfPid
   register masterService self
   say "registered"
-  serve initState (initializeMaster ns) masterProcess
+  ts <- spawnSymmetric ns $ $(mkBriskClosure 'tagServer) ()
+  serve initState (initializeMaster ts) (masterProcess ts)
 
-initializeMaster :: [NodeId] -> MasterState -> Process (InitResult MasterState)
-initializeMaster ns s
+initializeMaster :: SymSet ProcessId -> MasterState -> Process (InitResult MasterState)
+initializeMaster ts s
   = do us <- getSelfPid
-       ts <- spawnSymmetric ns $ $(mkBriskClosure 'tagServer) ()
-       bs <- spawnSymmetric ns $ $(mkBriskClosure 'dataServer) ()
+       -- ts <- spawnSymmetric ns $ $(mkBriskClosure 'tagServer) ()
+       -- bs <- spawnSymmetric ns $ $(mkBriskClosure 'dataServer) ()
        let s' = s { tagServers  = ts
-                  , dataServers = bs
+                  , dataServers = empty -- bs
                   }
        return $ InitOk s' NoDelay
 
-masterProcess :: ProcessDefinition MasterState
-masterProcess = defaultProcess {
-  apiHandlers = [masterAPIHandler]
+masterProcess :: SymSet ProcessId -> ProcessDefinition MasterState
+masterProcess ts = defaultProcess {
+  apiHandlers = [masterAPIHandler ts]
   }
 
-masterAPIHandler :: Dispatcher MasterState
-masterAPIHandler = handleCall masterAPIHandler'
+masterAPIHandler :: SymSet ProcessId -> Dispatcher MasterState
+masterAPIHandler ts = handleCall (masterAPIHandler' ts)
 
 type MasterReply = Process (ProcessReply MasterResponse MasterState)
 
-masterAPIHandler' :: MasterState -> MasterAPI -> MasterReply
-masterAPIHandler' s m
-  = reply OK s
+masterAPIHandler' :: SymSet ProcessId -> MasterState -> MasterAPI -> MasterReply
 {-
 masterAPIHandler' s (AddBlob n k)
   = reply (AddBlobServers blob ts) s'
@@ -143,18 +142,23 @@ masterAPIHandler' s (AddTag tag refs)
   where
     go _ y = send y ()
     tns    = tagServers s
-masterAPIHandler' s (GetTag tid)
-  = do res <- foldM go Nothing (tagServers s)
+-}
+masterAPIHandler' ts s (GetTag tid)
+  = do res <- foldM go Nothing ts
        let refs = maybe [] tagRefs res
        reply (TagRefs refs) s
   where
     go t0 tn = do t <- TN.getTag tn tid
-                  case (t0, t) of
-                    (Just Tag{tagRev=i}, TN.TagFound t'@Tag{tagRev=j})
-                      | j > i           -> return (Just t')
-                    (_, TN.TagFound t') -> return (Just t')
-                    _                   -> return t0
--}
+                  return t0
+    -- go t0 tn = do t <- TN.getTag tn tid
+    --               case (t0, t) of
+    --                 (Just Tag{tagRev=i}, TN.TagFound t'@Tag{tagRev=j})
+    --                   | j > i           -> return (Just t')
+    --                 (_, TN.TagFound t') -> return (Just t')
+    --                 _                   -> return t0
+masterAPIHandler' _ s _
+  = reply OK s
+
 doAddTag :: SymSet ProcessId -> TagId -> [TagRef] -> Process ()
 doAddTag tns tag refs
   = do best <- foldM askTN Nothing tns

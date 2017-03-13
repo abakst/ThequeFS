@@ -86,6 +86,9 @@ tagNodeAPIHandler' s (GetTag tid)
   = reply response s
   where
     response = maybe TagNotFound mkTgFound $ lookupTag s tid
+tagNodeAPIHandler' s _
+  = reply OK s
+{-
 tagNodeAPIHandler' s (GetTagInfo tid)
   = reply response s
   where
@@ -97,6 +100,7 @@ tagNodeAPIHandler' s (SetTag tid tag)
   where
     s'       = doSetTag s tid tag
     response = OK
+-}
 
 lookupTag :: TagNodeState -> TagId -> Maybe Tag
 lookupTag s id = M.lookup id (tags s)
