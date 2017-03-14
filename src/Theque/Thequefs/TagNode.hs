@@ -86,7 +86,9 @@ tagNodeAPIHandler' s (GetTag tid)
   = reply response s
   where
     response = maybe TagNotFound mkTgFound $ lookupTag s tid
-tagNodeAPIHandler' s _
+tagNodeAPIHandler' s (GetTagInfo tid)
+  = reply OK s
+tagNodeAPIHandler' s (SetTag tid t)
   = reply OK s
 {-
 tagNodeAPIHandler' s (GetTagInfo tid)

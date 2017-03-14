@@ -156,7 +156,9 @@ masterAPIHandler' ts s (GetTag tid)
     --                   | j > i           -> return (Just t')
     --                 (_, TN.TagFound t') -> return (Just t')
     --                 _                   -> return t0
-masterAPIHandler' _ s _
+masterAPIHandler' _ s (AddBlob _ _)
+  = reply OK s
+masterAPIHandler' _ s (AddTag _ _)
   = reply OK s
 
 doAddTag :: SymSet ProcessId -> TagId -> [TagRef] -> Process ()
