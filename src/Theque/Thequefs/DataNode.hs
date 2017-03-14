@@ -83,20 +83,16 @@ dataNodeAPIHandler = handleCall dataNodeAPIHandler'
 
 dataNodeAPIHandler' :: DataNodeState -> DataNodeAPI -> DataNodeReply
 dataNodeAPIHandler' st (GetBlob bid)
-  = reply BlobNotFound st
-  -- = case M.lookup bid (blobs st) of
-  --     Nothing    -> reply BlobNotFound st
-  --     Just bdata -> reply (BlobData bdata) st
-dataNodeAPIHandler' st (AddBlob _ _)
-  = reply BlobNotFound st
-{-
+  = reply response st
+  where
+     response = case M.lookup bid (blobs st) of
+                  Nothing    -> BlobNotFound
+                  Just bdata -> (BlobData bdata)
 dataNodeAPIHandler' st (AddBlob bn blob)
-  = case M.lookup bn (blobs st) of
-      Nothing ->
-        reply OK st'
-        where
-          st' = st { blobs = M.insert bn blob (blobs st) }
-      Just bdata -> do
-        say (bn ++ " := " ++ show bdata)
-        reply BlobExists st
--}
+  = reply response st'
+  where
+       (response, st') = case M.lookup bn $ blobs st of
+                           Nothing ->
+                             (OK, st { blobs = M.insert bn blob $ blobs st })
+                           Just _ ->
+                             (BlobExists, st)
