@@ -45,7 +45,7 @@ data TagNodeAPI = GetTag TagId
 instance Binary TagNodeAPI
 
 getTag :: ProcessId -> TagId -> Process TagNodeResponse         
-getTag tn tid = call tn (GetTag tid)
+getTag tnToGet tidToGet = call tnToGet (GetTag tidToGet)
 
 setTag :: ProcessId -> TagId -> Tag -> Process TagNodeResponse         
 setTag tn tid tag = call tn (SetTag tid tag)
@@ -87,14 +87,9 @@ tagNodeAPIHandler' s (GetTag tid)
   where
     response = maybe TagNotFound mkTgFound $ lookupTag s tid
 tagNodeAPIHandler' s (GetTagInfo tid)
-  = reply OK s
-tagNodeAPIHandler' s (SetTag tid t)
-  = reply OK s
-{-
-tagNodeAPIHandler' s (GetTagInfo tid)
   = reply response s
   where
-    response = maybe TagNotFound TagInfo
+    response = maybe TagNotFound TagInfo 
              . fmap tagRev
              $ lookupTag s tid
 tagNodeAPIHandler' s (SetTag tid tag)
@@ -102,8 +97,6 @@ tagNodeAPIHandler' s (SetTag tid tag)
   where
     s'       = doSetTag s tid tag
     response = OK
--}
-
 lookupTag :: TagNodeState -> TagId -> Maybe Tag
 lookupTag s id = M.lookup id (tags s)
 

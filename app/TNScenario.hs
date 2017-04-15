@@ -20,25 +20,25 @@ import Control.Distributed.Process.ManagedProcess.Brisk
 readTagRefs :: IO [TagRef]
 readTagRefs = undefined
 
+data Cmd = Get | Add | Alloc
+  deriving (Show, Read)
+
 testClient :: ProcessId -> Process ()
-testClient m
-  = do -- cmd  <- liftIO $ getChar
-       name <- liftIO $ getLine
-       -- dat  <- liftIO $ read <$> getLine
-       -- refs <- liftIO $ readTagRefs
-       -- rpc  <- case cmd of
-         -- 'a' -> do ref <- liftIO $ getLine
-         --           return (M.AddBlob name dat)
-         -- 'g' -> return (GetTag (TagId name))
-         -- 't' -> return (AddTag (TagId name) refs)
-       let rpc = GetTag (TagId name)
-       call m rpc :: Process MasterResponse
+testClient masta
+  = do cmd     <- liftIO $ getLine
+       name    <- liftIO $ getLine
+       refs    <- liftIO $ readTagRefs
+       rpc     <- case read cmd of
+                    Add   -> return $ AddTag (TagId name) refs 
+                    Get   -> return $ GetTag (TagId name) 
+                    Alloc -> return $ AddBlob name 3
+       call masta rpc :: Process MasterResponse
        return ()
 
 remotable ['testClient]
 
 main :: Backend -> NodeId -> [NodeId] -> [NodeId] -> Process ()
 main be mnode slaveNodes clientNodes
-  = do m  <- getSelfPid
-       spawnSymmetric clientNodes $ $(mkBriskClosure 'testClient) m 
+  = do moi  <- getSelfPid
+       spawnSymmetric clientNodes $ $(mkBriskClosure 'testClient) moi
        runMaster be slaveNodes

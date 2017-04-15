@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+N=$1
+shift
+
+FILE="$1"
+EXPFILE="$FILE.exp"
+shift
+
+./Common/expand.pl "$N" "$FILE" > "$EXPFILE"
+echo spin "$*" "$EXPFILE"
+spin "$@" "$EXPFILE"

@@ -127,43 +127,26 @@ masterAPIHandler ts = handleCall (masterAPIHandler' ts)
 type MasterReply = Process (ProcessReply MasterResponse MasterState)
 
 masterAPIHandler' :: SymSet ProcessId -> MasterState -> MasterAPI -> MasterReply
-{-
-masterAPIHandler' s (AddBlob n k)
+masterAPIHandler' tns s (AddBlob n k)
   = reply (AddBlobServers blob ts) s'
   where
     ts         = chooseDataServers k s
     (blob, s') = newBlob n s
-masterAPIHandler' s (AddTag tag refs)
+masterAPIHandler' tns s (AddTag addtag refs)
   -- 1. ask each tag server for current version of tag
   -- 2. choose most up-to-date??
   -- 3. modify tag store
-  = do doAddTag tns tag refs
+  = do doAddTag tns addtag refs
        reply OK s
-  where
-    go _ y = send y ()
-    tns    = tagServers s
--}
+
 masterAPIHandler' ts s (GetTag tid)
-  = do res <- foldM go Nothing ts
+  = do res <- foldM (askTN tid) Nothing ts
        let refs = maybe [] tagRefs res
        reply (TagRefs refs) s
-  where
-    go t0 tn = do t <- TN.getTag tn tid
-                  return t0
-    -- go t0 tn = do t <- TN.getTag tn tid
-    --               case (t0, t) of
-    --                 (Just Tag{tagRev=i}, TN.TagFound t'@Tag{tagRev=j})
-    --                   | j > i           -> return (Just t')
-    --                 (_, TN.TagFound t') -> return (Just t')
-    --                 _                   -> return t0
-masterAPIHandler' _ s (AddBlob _ _)
-  = reply OK s
-masterAPIHandler' _ s (AddTag _ _)
-  = reply OK s
 
 doAddTag :: SymSet ProcessId -> TagId -> [TagRef] -> Process ()
 doAddTag tns tag refs
-  = do best <- foldM askTN Nothing tns
+  = do best <- foldM (askTN tag) Nothing tns
        foldM (setTN (tag' best)) () tns
        return ()
   where
@@ -177,16 +160,19 @@ doAddTag tns tag refs
     tag' mtag
       = maybe newtag updtag $ mtag
 
-    setTN t _ tn = TN.setTag tn tag t >> return ()
-
-    askTN best tn
-      = do tag <- TN.getTag tn tag
-           case (tagRev <$> best, tag) of
-             (Just i, TN.TagFound t@Tag{tagRev = i'})
-               | i' > i  -> return (Just t)
-             (_, TN.TagFound t@Tag{})
-                         -> return (Just t)
-             _           -> return best
+    setTN t _ tn = do TN.setTag tn tag t
+                      return ()
+askTN :: TagId -> Maybe Tag -> ProcessId -> Process (Maybe Tag)
+askTN tagId best tn
+  = do askedTag <- TN.getTag tn tagId
+       case askedTag of
+         TN.TagFound tf@Tag{tagRev = idxNew} ->
+           case tagRev <$> best of
+             Just idx  -> if idx < idxNew then return (Just tf) else return best
+             Nothing   -> return (Just tf)
+         TN.TagNotFound -> return best
+         TN.OK          -> return best
+         TN.TagInfo _   -> return best
 
 chooseDataServers :: Int -> MasterState -> [ProcessId]
 chooseDataServers k s

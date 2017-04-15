@@ -46,7 +46,7 @@ library
 executable thequefs
   hs-source-dirs:      app
   main-is:             Main.hs
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -package distributed-static
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -package distributed-static -O0
   build-depends:       base
                      , theque
                      , unix
