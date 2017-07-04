@@ -105,20 +105,19 @@ The master must:
   3. enter RPC loop
 -}
 
+-- Reshuffle things to get the Scenario working..
 runMaster :: Backend -> [NodeId] -> Process ()
 runMaster _ ns = do
   self <- getSelfPid
   register masterService self
   say "registered"
   bs <- spawnSymmetric ns $ $(mkBriskClosure 'dataServer) ()
-  -- ts <- spawnSymmetric ns $ $(mkBriskClosure 'tagServer) ()
-  ts <- spawnSymmetric ns $ $(mkBriskClosure 'foo) ()
+  ts <- spawnSymmetric ns $ $(mkBriskClosure 'tagServer) ()
   serve initState (initializeMaster bs ts) (masterProcess bs ts)
 
 initializeMaster :: SymSet ProcessId -> SymSet ProcessId -> MasterState -> Process (InitResult MasterState)
 initializeMaster bs ts s
   = do us <- getSelfPid
-       -- ts <- spawnSymmetric ns $ $(mkBriskClosure 'tagServer) ()
        let s' = s { tagServers  = ts
                   , dataServers = bs
                   }
