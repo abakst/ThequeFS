@@ -32,7 +32,8 @@ import Control.Distributed.Process.ManagedProcess.Brisk
 
 
 import Theque.Thequefs.Types
-import Theque.Thequefs.DataNode hiding (AddBlob, initState, OK)
+import qualified Theque.Thequefs.DataNode as DN
+import Theque.Thequefs.DataNode hiding (AddBlob, PushBlob, GetBlob, BlobExists, BlobData, initState, OK)
 import Theque.Thequefs.TagNode  hiding (BlobId, GetTag, initState, OK)
 import qualified Theque.Thequefs.TagNode as TN
 
@@ -52,6 +53,8 @@ initState = MS { dataServers = undefined
                }
 
 data MasterAPI = AddBlob BlobId Int     -- ^ Args: Blob prefix, Replication
+               | PushBlob String BS.ByteString
+               | GetBlob BlobId
                | GetTag  TagId          -- ^ Args: Tag Id to fetch
                | AddTag  TagId [TagRef] -- ^ Args: Tag Name, List of Refs
                  deriving (Eq, Ord, Show, Generic)
@@ -59,6 +62,7 @@ data MasterAPI = AddBlob BlobId Int     -- ^ Args: Blob prefix, Replication
 data MasterResponse = OK
                     | TagRefs [TagRef]
                     | AddBlobServers BlobId [ProcessId]
+                    | DNResponse DN.DataNodeResponse
                     deriving (Eq, Ord, Show, Generic)
 
 instance Binary MasterAPI
@@ -89,7 +93,10 @@ tagServer () = runTagNode
 dataServer :: () -> Process ()
 dataServer () = runDataNode
 
-remotable ['tagServer, 'dataServer]
+foo :: () -> Process ()
+foo () = return ()
+
+remotable ['tagServer, 'dataServer, 'foo]
 {-
 The master must:
   0. register service
@@ -103,43 +110,63 @@ runMaster _ ns = do
   self <- getSelfPid
   register masterService self
   say "registered"
-  ts <- spawnSymmetric ns $ $(mkBriskClosure 'tagServer) ()
-  serve initState (initializeMaster ts) (masterProcess ts)
+  bs <- spawnSymmetric ns $ $(mkBriskClosure 'dataServer) ()
+  -- ts <- spawnSymmetric ns $ $(mkBriskClosure 'tagServer) ()
+  ts <- spawnSymmetric ns $ $(mkBriskClosure 'foo) ()
+  serve initState (initializeMaster bs ts) (masterProcess bs ts)
 
-initializeMaster :: SymSet ProcessId -> MasterState -> Process (InitResult MasterState)
-initializeMaster ts s
+initializeMaster :: SymSet ProcessId -> SymSet ProcessId -> MasterState -> Process (InitResult MasterState)
+initializeMaster bs ts s
   = do us <- getSelfPid
        -- ts <- spawnSymmetric ns $ $(mkBriskClosure 'tagServer) ()
-       -- bs <- spawnSymmetric ns $ $(mkBriskClosure 'dataServer) ()
        let s' = s { tagServers  = ts
-                  , dataServers = empty -- bs
+                  , dataServers = bs
                   }
        return $ InitOk s' NoDelay
 
-masterProcess :: SymSet ProcessId -> ProcessDefinition MasterState
-masterProcess ts = defaultProcess {
-  apiHandlers = [masterAPIHandler ts]
+masterProcess :: SymSet ProcessId -> SymSet ProcessId -> ProcessDefinition MasterState
+masterProcess bs ts = defaultProcess {
+  apiHandlers = [masterAPIHandler bs ts]
   }
 
-masterAPIHandler :: SymSet ProcessId -> Dispatcher MasterState
-masterAPIHandler ts = handleCall (masterAPIHandler' ts)
+masterAPIHandler :: SymSet ProcessId -> SymSet ProcessId -> Dispatcher MasterState
+masterAPIHandler bs ts = handleCall (masterAPIHandler' bs ts)
 
 type MasterReply = Process (ProcessReply MasterResponse MasterState)
 
-masterAPIHandler' :: SymSet ProcessId -> MasterState -> MasterAPI -> MasterReply
-masterAPIHandler' tns s (AddBlob n k)
+masterAPIHandler' :: SymSet ProcessId -> SymSet ProcessId -> MasterState -> MasterAPI -> MasterReply
+masterAPIHandler' bns tns s (AddBlob n k)
   = reply (AddBlobServers blob ts) s'
   where
     ts         = chooseDataServers k s
     (blob, s') = newBlob n s
-masterAPIHandler' tns s (AddTag addtag refs)
+
+masterAPIHandler' bns tns s (PushBlob bid dat)
+  = do foldM (\_ dn -> do pushBlob dn bid dat
+                          return () ) () bns -- Replicate to EVERYONE for now
+       reply OK s
+
+masterAPIHandler' bns tns s (GetBlob bid) -- Since we're replicating to EVERYONE, need
+                                          -- to query everyone
+  = do b <- foldM (\r dn -> do b <- call dn (DN.GetBlob bid)
+                               return (r `combine` Just b)
+                  ) Nothing bns
+       case b of
+         Nothing -> reply (DNResponse DN.BlobNotFound) s
+         Just dn -> reply (DNResponse dn) s
+       reply OK s
+ where
+   combine Nothing x = x
+   combine x y       = x
+
+masterAPIHandler' bns tns s (AddTag addtag refs)
   -- 1. ask each tag server for current version of tag
   -- 2. choose most up-to-date??
   -- 3. modify tag store
   = do doAddTag tns addtag refs
        reply OK s
 
-masterAPIHandler' ts s (GetTag tid)
+masterAPIHandler' bns ts s (GetTag tid)
   = do res <- foldM (askTN tid) Nothing ts
        let refs = maybe [] tagRefs res
        reply (TagRefs refs) s

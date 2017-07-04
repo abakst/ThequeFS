@@ -20,18 +20,18 @@ import Control.Distributed.Process.ManagedProcess.Brisk
 readTagRefs :: IO [TagRef]
 readTagRefs = undefined
 
-data Cmd = Get | Add | Alloc
+data Cmd = Get | Add | Alloc | Push | CGetBlob
   deriving (Show, Read)
 
 testClient :: ProcessId -> Process ()
 testClient masta
-  = do cmd     <- liftIO $ getLine
-       name    <- liftIO $ getLine
-       refs    <- liftIO $ readTagRefs
+  = do (cmd, dat, name, refs) <- liftIO $ undefined
        rpc     <- case read cmd of
                     Add   -> return $ AddTag (TagId name) refs 
                     Get   -> return $ GetTag (TagId name) 
                     Alloc -> return $ AddBlob name 3
+                    Push  -> return $ PushBlob name dat
+                    CGetBlob -> return $ M.GetBlob name
        call masta rpc :: Process MasterResponse
        return ()
 
